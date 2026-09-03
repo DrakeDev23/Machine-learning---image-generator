@@ -18,7 +18,7 @@ MODEL_DIR = "./models"
 IMAGE_SIZE = 32
 CHANNELS = 3
 LATENT_DIM = 100
-BATCH_SIZE = 32
+BATCH_SIZE = 4
 LEARNING_RATE = 0.0002
 BETA1 = 0.5
 EPOCHS = 10
@@ -26,7 +26,7 @@ EPOCHS = 10
 NGF = 64
 NDF = 64
 
-SUPPORTED_EXTENSIONS = (".jpg", ".jpeg", ".png")
+SUPPORTED_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp")
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 os.makedirs(MODEL_DIR, exist_ok=True)
@@ -76,6 +76,15 @@ transform = transforms.Compose([
 ])
 
 dataset = CustomImageDataset(DATASET_PATH, transform=transform)
+
+if len(dataset) < BATCH_SIZE:
+    raise RuntimeError(
+        f"BATCH_SIZE={BATCH_SIZE} is larger than the dataset ({len(dataset)} images). "
+        f"With drop_last=True this produces zero batches, so the training loop would "
+        f"silently do nothing. Add more images to '{DATASET_PATH}' or lower BATCH_SIZE "
+        f"to at most {len(dataset)}."
+    )
+
 dataloader = DataLoader(
     dataset,
     batch_size=BATCH_SIZE,
@@ -83,6 +92,12 @@ dataloader = DataLoader(
     drop_last=True,
     num_workers=0,
 )
+
+if len(dataloader) == 0:
+    raise RuntimeError(
+        f"BATCH_SIZE={BATCH_SIZE} combined with drop_last=True produces zero batches "
+        f"from a dataset of {len(dataset)} images. Add more images or lower BATCH_SIZE."
+    )
 
 
 def weights_init(m):
@@ -98,10 +113,7 @@ class Generator(nn.Module):
     def __init__(self, nz=LATENT_DIM, ngf=NGF, nc=CHANNELS):
         super().__init__()
         self.model = nn.Sequential(
-            nn.ConvTranspose2d(nz, ngf * 8, kernel_size=4, stride=1, padding=0, bias=False),
-            nn.BatchNorm2d(ngf * 8),
-            nn.ReLU(True),
-            nn.ConvTranspose2d(ngf * 8, ngf * 4, kernel_size=4, stride=2, padding=1, bias=False),
+            nn.ConvTranspose2d(nz, ngf * 4, kernel_size=4, stride=1, padding=0, bias=False),
             nn.BatchNorm2d(ngf * 4),
             nn.ReLU(True),
             nn.ConvTranspose2d(ngf * 4, ngf * 2, kernel_size=4, stride=2, padding=1, bias=False),
@@ -131,10 +143,7 @@ class Discriminator(nn.Module):
             nn.Conv2d(ndf * 2, ndf * 4, kernel_size=4, stride=2, padding=1, bias=False),
             nn.BatchNorm2d(ndf * 4),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(ndf * 4, ndf * 8, kernel_size=4, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(ndf * 8),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(ndf * 8, 1, kernel_size=4, stride=1, padding=0, bias=False),
+            nn.Conv2d(ndf * 4, 1, kernel_size=4, stride=1, padding=0, bias=False),
             nn.Sigmoid(),
         )
 
@@ -193,9 +202,8 @@ for epoch in range(1, EPOCHS + 1):
         d_loss.backward()
         optimizer_D.step()
 
-        if i % 50 == 0:
-            print(f"[Epoch {epoch}/{EPOCHS}] [Batch {i}/{len(dataloader)}] "
-                  f"[D loss: {d_loss.item():.4f}] [G loss: {g_loss.item():.4f}]")
+        print(f"[Epoch {epoch}/{EPOCHS}] [Batch {i}/{len(dataloader)}] "
+              f"[D loss: {d_loss.item():.4f}] [G loss: {g_loss.item():.4f}]")
 
     generator.eval()
     with torch.no_grad():
