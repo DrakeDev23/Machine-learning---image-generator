@@ -216,4 +216,5 @@ torch.save(generator.state_dict(), os.path.join(MODEL_DIR, "generator.pth"))
 torch.save(discriminator.state_dict(), os.path.join(MODEL_DIR, "discriminator.pth"))
 print(f"Saved trained models to '{MODEL_DIR}/generator.pth' and '{MODEL_DIR}/discriminator.pth'")
 
+#dadwadw
 print("Training finished!")
